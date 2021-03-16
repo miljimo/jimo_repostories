@@ -272,7 +272,6 @@ class Repository(object):
 """
 
 
-@argsint.argument_validator()
 class Management(object):
 
     def __init__(self):
@@ -343,6 +342,7 @@ def commit_all():
 
 
 if __name__ == "__main__":
+    repo = create_if_not_exists_repository("./data/database.json");
     res = Repository("./data/database.json")
     if(isinstance(res, Repository)):
         print("Valid instance")
