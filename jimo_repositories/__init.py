@@ -1,6 +1,3 @@
-
-from repositories.argsvalidator         import ArgsValidator;
-from repositories.argsinitialiser       import ArgsInitialiser;
-from repositories.securityproviderbase  import SecurityProviderBase;
-from repositories.insecurityprovider    import InSecurityProvider;
-from repositories.repository            import Repository
+from jimo_repositories.argsinitialiser import *
+from jimo_repositories.fileinfo import *
+from jimo_repositories.repository import *
