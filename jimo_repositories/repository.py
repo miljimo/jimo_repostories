@@ -1,14 +1,23 @@
 import os;
+import sys;
 import json;
 import uuid;
 import hashlib
 import warnings;
 import base64
-from repositories.argsinitialiser      import ArgsInitialiser
-from repositories.securityproviderbase import SecurityProviderBase
-from repositories.insecurityprovider   import InSecurityProvider
+from datetime import datetime;
+import threading;
+from fileinfo import *;
+import argsinitialiser as argsint;
 
 
+CREATE_DATE_TIME_FIELD   = "CreateDateTime"
+REPOSITORY_HASH_KEY                 ="Hash"
+
+
+"""
+File mode creations
+"""
 class OpenMode(int):
     """
      Create a new file for read, if the 
@@ -18,60 +27,68 @@ class OpenMode(int):
     CREATE_NEW                    =  0b0100;
     ALL                           =  CREATE_EXIST_OPEN_WRITE | CREATE_EXIST_OPEN_READ | CREATE_NEW
 
+    
+"""
+ Create group of repository that you can commit at the same time.
+"""
+class RepositoryGroup(object):
+    def __init__(self, owner):
+        self.__repos =  dict();
+        self.__owner  =  owner;
+        self.__synclocker =  threading.Lock();
+
+    def create(self, filename):
+        FPSTimer.FPSLocker(self.__synclocker);
+        if(filename in self.__repos) is not True:
+           repo =  Repository(filename);
+           self.__repos[filename] = repo ;
+           return  repo ;
+        return self.__repos[filename];
+
+    def remove(self, filename:str):
+        if(filename in self.__repos):
+            del self.__repos[filename];
+
+    def commit(self):    
+        FPSTimer.FPSLocker(self.__synclocker);
+        for key in  self.__repos:
+            repo =   self.__repos[key];
+            repo.commit();
+        self.__owner.commit();
+        
+        
+@argsint.argument_validator(data = None,
+                            open_mode = OpenMode.ALL)    
 class Repository(object):
     __HASH_KEY__ ="hash_key"
 
     def __init__(self, filename:str, **kwargs):
-
-        self.__argument_initialiser   =  ArgsInitialiser(**kwargs);
-        self.initialised_inputs();
-
-        self.__securityProvider       =  self.__argument_initialiser.get("secure_provider");
-        if(self.security_provider is not None):
-            self.security_provider.dont_secure  =  self.__argument_initialiser.get("dont_secure");
-        self.__data                      =  self.__argument_initialiser.get("data");
+        self.__data                      =  kwargs["data"];
+        self.__open_mode                 =  kwargs["open_mode"]
         self.__filename                  =  filename;
         self.can_read                    =  False;
         self.can_write                   =  False;
+        self._DesignChanges              =  False
         
-        if(self.data is None):
+        if(self.__data is None):
             #we dont need to load from the database file.
-            self.__data      =  self.__open_data_file(filename , self.arguments.get("open_mode"));
-        self.content_tempered            = self.has_changed;
+            self.__data                  = self.__open_data_file(filename , self.__open_mode);           
+        self.content_tempered            = self.has_changed or  self._DesignChanges;
         self.is_open                     = self.data is not None;
         self.__folder                    = os.path.dirname(filename);
-
-    def initialised_inputs(self):
-        self.__argument_initialiser.initialise_default(dont_secure = True);
-        self.__argument_initialiser.initialise_default(secure_provider = InSecurityProvider());
-        self.__argument_initialiser.initialise_default(data = None);
-        self.__argument_initialiser.initialise_default(open_mode= OpenMode.ALL);
-        self.__argument_initialiser.populate();
-        
-    @property
-    def arguments(self):
-        return self.__argument_initialiser;
-
-    @property
-    def security_provider(self):
-        return self.__securityProvider;
-        
-    @security_provider.setter
-    def security_provider(self, provider:SecurityProviderBase):
-        if(isinstance(provider, SecurityProviderBase)):
-            self.__securityProvider = provider;
-        else:
-            if(self.__securityProvider == None):
-                self.__securityProvider = InSecurityProvider();
-
-
+        self.__groups                    =  None;
+    
+    def create_group(self):
+        if(self.__groups is None):
+            self.__groups =  RepositoryGroup(self);
+        return self.__groups; 
 
     def __open_data_file(self, filename:str, open_mode:int):
-        self.content_tempered = False;
+        self.content_tempered = False;        
         data  =  None;
         if(os.path.exists(filename) is not True):
             if (( (open_mode >> (OpenMode.CREATE_NEW >> 1))  & 0x01) == 0x01):
-                  self.__create_directory_and_files(filename);
+                self.__create_directory_and_files(filename);                
         data  = self.__load_database(filename);
         if(data is None):
             raise IOError("Unable to load database {0}".format(filename));
@@ -81,17 +98,23 @@ class Repository(object):
         #Do for write only.
         if(((open_mode >> (OpenMode.CREATE_EXIST_OPEN_WRITE >> 1)) & 0x01) == 0x01):
             self.can_write  =  True;
+        if(CREATE_DATE_TIME_FIELD in data) is not True:
+            data[CREATE_DATE_TIME_FIELD] =  GetFileCreateTimestamp(self.filename)
+
+        if(self.__HASH_KEY__ in data):
+            data[REPOSITORY_HASH_KEY] = data[self.__HASH_KEY__];
+            del data[self.__HASH_KEY__];
+            self._DesignChanges =  True;
         return data;
 
     @property
     def has_changed(self):
-        current_hash  =  self.get(self.__HASH_KEY__,"#");
-        self.remove(self.__HASH_KEY__);
-        content  =  self.security_provider.encrypt(json.dumps(self.data).encode("utf-8"));
-        has_changed   =   (self.create_hash(content) != current_hash);    
-        self.add(self.__HASH_KEY__, current_hash); 
-        return has_changed;
-    
+        current_hash  =  self.get(REPOSITORY_HASH_KEY,"#");
+        self.remove(REPOSITORY_HASH_KEY);
+        content  =  json.dumps(self.data).encode("utf-8")
+        haschanged   =   (self.create_hash(content) != current_hash);    
+        self.add(REPOSITORY_HASH_KEY, current_hash); 
+        return haschanged;
   
     @has_changed.setter
     def has_changed(self, status:bool):
@@ -109,10 +132,15 @@ class Repository(object):
     @property
     def data(self):
         return self.__data
+      
+    def create_new_content_hash(self):
+      prev_hash =  self.get("Hash");
+      self.remove(REPOSITORY_HASH_KEY);
+      content  = json.dumps(self.data).encode("utf-8");
+      self.add(REPOSITORY_HASH_KEY, prev_hash);
+      return self.create_hash(content);
 
     def create_hash(self, content:bytes):
-      if(self.security_provider is not None):
-          content  =  self.security_provider.encrypt(content);
       sha256   =  hashlib.sha256();
       sha256.update(content);
       return sha256.hexdigest();
@@ -127,10 +155,8 @@ class Repository(object):
                     if(name in self.data):
                         if(self.data[name] != value):
                             self.data[name] = value;
-                            self.has_changed = True;
                     else:
                         self.data[name] = value;
-                        self.has_changed = True;
                     status            = True
         return status
 
@@ -147,8 +173,7 @@ class Repository(object):
         if(self.data is not None):
             if(name in self.data):
                 del self.data[name];
-                status  =  True
-                self.__hasChanged  = True
+                status  =  True               
         return status
 
     def get(self, name, default:object = None):
@@ -161,16 +186,15 @@ class Repository(object):
     def commit(self, **kwargs):
         status  = False;
         if(type(self.data)  == dict):
-            if(self.has_changed is True):
-                #Do hash the key with the content.
-                self.remove(self.__HASH_KEY__);
-                #Encry the content with key.
-                contents_without_key  = self.security_provider.encrypt(json.dumps(self.data).encode("utf-8"));
+            if(self.has_changed is True) or (self.content_tempered is True):
+                #Dont hash the key with the content.
+                self.remove
+                self.remove(REPOSITORY_HASH_KEY);
+                #content without hash-key
+                contents_without_key  = json.dumps(self.data).encode("utf-8")
                 # add the key 
-                self.add(self.__HASH_KEY__, self.create_hash(contents_without_key));
-
-                contents_with_key   =  self.security_provider.encrypt(json.dumps(self.data).encode("utf-8"));                
-              
+                self.__data[REPOSITORY_HASH_KEY] = self.create_hash(contents_without_key);
+                contents_with_key  =  json.dumps(self.data).encode("utf-8"); 
                 with open(self.filename, mode="wb+") as file:
                     file.write(contents_with_key);
                 self.content_tempered = False;
@@ -202,7 +226,7 @@ class Repository(object):
             status  =  True;
         return status;
 
-    def __load_database(self,filename:str):
+    def __load_database(self,filename:str):       
         database = None;
         if(os.path.exists(filename)):
             with open(filename , mode='rb+') as file:
@@ -210,9 +234,7 @@ class Repository(object):
                 try:
                     content  =  file.read();
                     if(content):
-                        if(self.security_provider is not None):
-                            content  =  self.security_provider.decrypt(content);
-                        obj      =  json.loads(content);
+                        obj =  json.loads(content);
                     else:
                         obj = dict();
                 except Exception as err:
@@ -245,13 +267,20 @@ class Management(object):
 
     def __init__(self):
         self.__repositories  =  dict();
-
-    def create(self,filename: str, **kwargs)->Repository:
+        
+    def create(self,filename: str, **kwargs)->Repository:       
         if(type(filename) == str):           
             if(filename in self.__repositories) is not True:               
                 self.__repositories[filename] = self._create_instance(filename, **kwargs)
         return self.get(filename)
 
+    def remove(self, filename):
+       
+        if(filename in self.__repositories):
+            del self.__repositories[filename];
+            return True
+        return False
+           
     def get(self, filename:str)->Repository:
         repo = None
         if(filename in self.__repositories):
@@ -262,12 +291,14 @@ class Management(object):
         return repo
 
     def _create_instance(self, filename:str, **kwargs)->Repository:
+       
         repo  = None;
         if(filename in self.__repositories) is not True:
             repo  = Repository(filename= filename);
         return repo
 
     def commit(self):
+        
         for path in self.__repositories:
             if(path is not None):
                 repo  = self.__repositories[path];
@@ -281,11 +312,15 @@ mgr  =  Management();
 def get_repository(filename:str)->Repository:
     global mgr;
     return mgr.get(filename);
-  
+
+def get_manager():
+    global mgr;
+    return mgr;  
 
 def create_if_not_exists_repository(filename:str)->Repository:
     global mgr;  
     return mgr.create(filename);
+
 
 def commit_all():
     global mgr;
@@ -294,15 +329,9 @@ def commit_all():
 
 
 if __name__ =="__main__":
-    res  = Repository("./data/hidden/database.json")
-    res.add("uuid", 81981);
-    res.add("name", "johnson");
-    print(res.data);
-    print("No temp = {0}".format(res.content_tempered))
-   
-    if(res.content_tempered is True):
-        res.commit();
-        print(res.data)
-    
-   
+    res  = Repository("./data/database.json")
 
+    
+
+   
+    print(len(res.data));

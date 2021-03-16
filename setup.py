@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
     
 setuptools.setup(name = "repositories-jimobama",
       version="1.0.0",
-      description="Simple JSON database for python",
+      description="Simple JSON database manager for python",
       long_description =long_description,
       url="https://github.com/miljimo/repositories.git",
       long_description_content_type="text/markdown",
