@@ -305,7 +305,7 @@ class Management(object):
 
         repo = None
         if(filename in self.__repositories) is not True:
-            repo = Repository(filename=filename)
+            repo = Repository(filename)
         return repo
 
     def commit(self):

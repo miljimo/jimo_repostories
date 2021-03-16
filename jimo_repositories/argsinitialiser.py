@@ -92,11 +92,12 @@ if __name__ == "__main__":
         return "Job"
     # Test class
 
-    @argument_validator(name=None, age=89)
+    @argument_validator(name=None, age=89, filename = None)
     class __Person(object):
         def __init__(self, filename, **kwargs):
             self.Name = kwargs['name']
             self.Age = kwargs['age']
+            print(filename)
 
-    p = __Person("Obaro", age=100)
+    p = __Person(filename= "Obaro.data", age=100)
     value()
