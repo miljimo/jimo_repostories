@@ -3,7 +3,7 @@ long_description = "Simple JSON database";
 with open("README.md", "r") as fh:
     long_description = fh.read()
     
-setuptools.setup(name = "repositories-jimobama",
+setuptools.setup(name = "jimo_repositories",
       version="1.0.0",
       description="Simple JSON database manager for python",
       long_description =long_description,
@@ -12,7 +12,7 @@ setuptools.setup(name = "repositories-jimobama",
       author="Obaro I. Johnson",
       author_email="johnson.obaro@hotmail.com",
       packages=setuptools.find_packages(),
-      install_requires=[ "Crypto"],
+      install_requires=[],
       classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
