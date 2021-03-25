@@ -8,7 +8,7 @@ if (os.path.exists(readMEFile)):
       long_description = fh.read()
     
 setuptools.setup(name = "jimobama_repositories",
-      version="1.0.0",
+      version="1.2.0",
       description="Simple JSON database manager for python",
       long_description =long_description,
       long_description_content_type="text/markdown",
