@@ -1,6 +1,6 @@
 import os
 import sys
-import jimo_repositories.argsinitialiser as argsint
+import jimobama_repositories.argsinitialiser as argsint
 
 
 def GetFileInfo(filename):

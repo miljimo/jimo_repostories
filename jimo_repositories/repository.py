@@ -7,8 +7,8 @@ import warnings
 import base64
 from datetime import datetime
 import threading
-from jimo_repositories.fileinfo import *
-import jimo_repositories.argsinitialiser as argsint
+from jimobama_repositories.fileinfo import *
+import jimobama_repositories.argsinitialiser as argsint
 
 
 CREATE_DATE_TIME_FIELD = "CreateDateTime"
@@ -42,7 +42,6 @@ class RepositoryGroup(object):
         self.__synclocker = threading.Lock()
 
     def create(self, filename):
-        FPSTimer.FPSLocker(self.__synclocker)
         if(filename in self.__repos) is not True:
             repo = Repository(filename)
             self.__repos[filename] = repo
