@@ -1,6 +1,6 @@
 import os
 import sys
-import jimobama_repositories.argsinitialiser as argsint
+from jimobama_repositories.argsinitialiser import argument_validator
 
 
 def GetFileInfo(filename):
@@ -9,10 +9,13 @@ def GetFileInfo(filename):
         stat_info = os.stat(filename)
         create_t = 0
         modified_t = stat_info.st_mtime
-        if(sys.platform == "linux") or (sys.platform == "linux2"):
-            create_t = stat_info.st_birthtime
-        elif(sys.platform == "win32"):
-            create_t = stat_info.st_ctime
+        if(sys.platform == "win32"):
+            create_t = stat_info.st_ctime            
+        else:
+            if(hasattr(stat_info, "st_birthtime")):
+                create_t = stat_info.st_birthtime;
+            else:
+                 create_t  = stat_info.st_ctime;
         info = FileInfo(create_time=create_t, modified_time=modified_t)
     return info
 
@@ -24,7 +27,7 @@ def GetFileCreateTimestamp(filename):
     return timestamp
 
 
-@argsint.argument_validator(create_time=0.0000, modified_time=0.0000)
+@argument_validator(create_time=0.0000, modified_time=0.0000)
 class FileInfo(object):
 
     def __init__(self, **kwargs):

@@ -35,7 +35,7 @@ class argument_validator:
                 def construct_operation_wrapper(*args, **kwargs):
                     if(validator.validate(*args, **kwargs)):
                         return operation(*validator.args, **validator.kwargs)
-            return construct_operation_wrapper
+                return construct_operation_wrapper;
 
 
 """
@@ -78,6 +78,13 @@ if __name__ == "__main__":
         def __init__(self, filename:str, **kwargs):
             self.Name = kwargs['name']
             self.Age = kwargs['age']
+
+    @argument_validator(age=89, name="Obaro")
+    def create_person(**kwargs):
+        print(kwargs);
+
+
+    create_person(age=190, name="John");
            
     filename =  "Obaro.data"
     p = __Person(filename, name="Johnson")
